@@ -1,0 +1,14 @@
+{
+    "./app/images/image_1.png": {
+        "Jeffrey Chen": "accept",
+        "Nancy Li": "accept",
+        "Zoe Wang": "incorrect",
+        "Vivian Wu": "reject"
+    },
+    "./app/images/image_2.png": {
+        "Jeffrey Chen": "incorrect"
+    },
+    "./app/images/image_3.png": {
+        "Jeffrey Chen": "accept"
+    }
+}
