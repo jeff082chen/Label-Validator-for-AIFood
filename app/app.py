@@ -1,5 +1,5 @@
 # Author: Jeffrey Chen
-# Last Modified: 08/02/2023
+# Last Modified: 08/03/2023
 import os, json, atexit, time, threading
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtGui import QColor
@@ -19,25 +19,55 @@ class Root(QMainWindow):
 
 # Backend logic
 class ControlSystem:
+
+    catagory2food = {
+        'A01': '米食',
+        'A02': '麵食',
+        'B01': '豬肉',
+        'B02': '雞肉',
+        'B03': '牛肉',
+        'B04': '羊肉',
+        'B05': '鴨肉',
+        'B06': '鵝肉',
+        'C01': '水果類',
+        'C02': '葉菜類',
+        'C03': '瓜果類',
+        'C04': '花菜花瓣類',
+        'C05': '根莖類',
+        'C06': '種子核果類',
+        'C07': '海菜菇蕈類',
+        'C08': '蒟蒻',
+        'D01': '魚肉',
+        'D02': '貝類',
+        'D03': '甲殼類',
+        'D04': '頭足軟體',
+        'E01': '蛋',
+        'E02': '豆腐',
+        'E03': '豆乾豆包',
+        'F01': '奶類'
+    }
+
     def __init__(self):
         # image paths
         self.current_image_index = 0
-        self.images = [f"./app/images/image_{i}.png" for i in range(1, 31)]
+        self.images_folder = os.path.join(os.path.dirname(__file__), "images")
+        # all images in the folder
+        self.images = [os.path.join(self.images_folder, image) for image in os.listdir(self.images_folder)]
 
         # Validators
         self.validators = ["Jeffrey Chen", "Nancy Li", "Zoe Wang", "Vivian Wu"]
         self.current_validator_index = 0
 
         # Validate Results
-        if not os.path.exists("./app/validate_results.json"):
-            with open("./app/validate_results.json", "w") as f:
+        if not os.path.exists(os.path.join(os.path.dirname(__file__), "validate_results.json")):
+            with open(os.path.join(os.path.dirname(__file__), "validate_results.json"), "w") as f:
                 json.dump({}, f, indent = 4, ensure_ascii = False)
-        with open("./app/validate_results.json", "r") as f:
+        with open(os.path.join(os.path.dirname(__file__), "validate_results.json"), "r") as f:
             self.validate_results = json.load(f)
 
         # prevent data loss
         atexit.register(self.exit)
-        self.heartbeat_file = "./app/.heartbeat.json"
+        self.heartbeat_file = os.path.join(os.path.dirname(__file__), "heartbeat.json")
 
         # Check for unclean shutdown
         if self.was_unclean_shutdown():
@@ -62,6 +92,15 @@ class ControlSystem:
     def current_validator(self):
         return self.validators[self.current_validator_index]
     
+    def current_labels(self):
+        current_image_name = os.path.basename(self.current_image())
+        # if has file extension, remove it
+        if '.' in current_image_name:
+            current_image_name = current_image_name[:current_image_name.index('.')]
+        labels = current_image_name.split('_')[0]
+        labels = [labels[i:i+3] for i in range(0, len(labels), 3)]
+        return [f"{label}: {self.catagory2food[label]}" for label in labels]
+
     def current_image(self):
         return self.images[self.current_image_index]
         
@@ -78,12 +117,16 @@ class ControlSystem:
         return self.images[self.current_image_index]
     
     def record_result(self, result):
-        if self.current_image() not in self.validate_results:
-            self.validate_results[self.current_image()] = {}
-        self.validate_results[self.current_image()][self.current_validator()] = result
+        current_image_name = os.path.basename(self.current_image())
+        # if has file extension, remove it
+        if '.' in current_image_name:
+            current_image_name = current_image_name[:current_image_name.index('.')]
+        if current_image_name not in self.validate_results:
+            self.validate_results[current_image_name] = {}
+        self.validate_results[current_image_name][self.current_validator()] = result
     
     def exit(self):
-        with open("./app/validate_results.json", "w") as f:
+        with open(os.path.join(os.path.dirname(__file__), "validate_results.json"), "w") as f:
             json.dump(self.validate_results, f, indent = 4, ensure_ascii = False)
         if os.path.exists(self.heartbeat_file):
             os.remove(self.heartbeat_file)
@@ -139,7 +182,7 @@ class App:
 
         # dropdown menu
         self.validator_dropdown = QtWidgets.QComboBox(self.root_div2)
-        self.validator_dropdown.setStyleSheet("""
+        self.validator_dropdown.setStyleSheet(""" 
             QComboBox {
                 border: 1px solid #ced4da;
                 border-radius: 4px;
@@ -169,6 +212,21 @@ class App:
         # position items in root_div2
         self.validator_label.move(pad, pad)
         self.validator_dropdown.move(pad, int(div_size * 0.09375) + pad * 2)
+
+        # create items in root_div3
+        # current label text
+        self.current_label_text = QLabel(self.root_div3)
+        self.current_label_text.setText("Current Labels:")
+        self.current_label_text.setStyleSheet("background-color: #f5f5dc; color: black;")
+
+        # current labels
+        self.current_label_list = QtWidgets.QListWidget(self.root_div3)
+        self.current_label_list.addItems(self.control.current_labels())
+        self.current_label_list.setFixedSize(int(div_size) - pad * 2, int(div_size * 0.5)) # 168 x 147
+
+        # position items in root_div3
+        self.current_label_text.move(pad, pad)
+        self.current_label_list.move(pad, int(div_size * 0.09375) + pad * 2)
 
         # create items in root_div4
         # buttons
@@ -203,8 +261,8 @@ class App:
         self.reject_button.clicked.connect(lambda: self.record_result("reject"))
 
         # position items in root_div4
-        self.next_image_button.move(pad, pad)
-        self.previous_image_button.move(int(div_size * 0.5) + pad * 2, pad)
+        self.previous_image_button.move(pad, pad)
+        self.next_image_button.move(int(div_size * 0.5) + pad * 2, pad)
         self.accept_button.move(pad, int(div_size * 0.09375) + pad * 2)
         self.incorrect_button.move(int(div_size * 0.5) + pad * 2, int(div_size * 0.09375) + pad * 2)
         self.reject_button.move(int(div_size * 0.5) * 2 + pad * 3, int(div_size * 0.09375) + pad * 2)
@@ -217,9 +275,17 @@ class App:
         new_image_path = self.control.next_image()
         self.label.setPixmap(QPixmap(new_image_path))
 
+        # update current labels
+        self.current_label_list.clear()
+        self.current_label_list.addItems(self.control.current_labels())
+
     def previous_image(self):
         new_image_path = self.control.previous_image()
         self.label.setPixmap(QPixmap(new_image_path))
+
+        # update current labels
+        self.current_label_list.clear()
+        self.current_label_list.addItems(self.control.current_labels())
 
     def record_result(self, result):
         self.control.record_result(result)
