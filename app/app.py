@@ -1,6 +1,6 @@
 # Author: Jeffrey Chen
 # Last Modified: 08/04/2023
-import os, json, atexit, time, threading
+import os, json, atexit, time, threading, re
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout
@@ -67,8 +67,13 @@ class ControlSystem:
         # image paths
         self.current_image_index = 0
         self.images_folder = os.path.join(os.path.dirname(__file__), "images")
-        # all images in the folder
-        self.images = [os.path.join(self.images_folder, image) for image in os.listdir(self.images_folder)]
+        # all images in the folder that fit the name format
+        # format: <food labels>_<image id>_<dataset id>.jpg
+        # food labels: Capital letter + 2 digit number, if multiple, no sperator
+        # image id: a sequence of digits
+        # dataset id: single digit
+        regex = re.compile(r"([A-Z]\d{2})+_\d+_\d\.jpg")
+        self.images = [os.path.join(self.images_folder, image) for image in os.listdir(self.images_folder) if regex.match(image)]
 
         # Validators
         self.validators = ["Jeffrey Chen", "Nancy Li", "Zoe Wang", "Vivian Wu"]
