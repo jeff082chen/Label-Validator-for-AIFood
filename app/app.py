@@ -30,7 +30,7 @@ class Root(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Label Validator")
-        self.setFixedSize(div_size * 2 + pad * 2, int(div_size * 1.25) + pad * 3)  # 454 x 283
+        self.setFixedSize(div_size * 6 + pad * 5, div_size * 3 + int(div_size * 0.09375) + pad * 7) # 1344 x 672
         self.setStyleSheet(f"background-color: {background_color_dark};")
 
 # Backend logic
@@ -155,6 +155,13 @@ class ControlSystem:
 
 # Main application
 class App:
+
+    def create_img_div(self, root):
+        img_div = QWidget(root)
+        img_div.setStyleSheet(f"background-color: {background_color_light};")
+        img_div.setFixedSize(int(div_size * 1.5), div_size) # 336 x 224
+        return img_div
+
     def __init__(self, root: Root):
         self.root = root
         self.control = ControlSystem()
@@ -163,28 +170,29 @@ class App:
         self.root.closeEvent = self.exit
 
         # create frames
-        self.root_div1 = QWidget(self.root)
-        self.root_div1.setStyleSheet(f"background-color: {background_color_light};")
-        self.root_div1.setFixedSize(div_size, div_size) # 224 x 224
+        # - top bar
+        self.top_bar = QWidget(self.root)
+        self.top_bar.setStyleSheet(f"background-color: {background_color_light};")
+        self.top_bar.setFixedSize(div_size * 6 + pad * 3, int(div_size * 0.09375) + pad * 2) # 1344 x 27
+        self.top_bar.move(pad, pad)
 
-        self.root_div2 = QWidget(self.root)
-        self.root_div2.setStyleSheet(f"background-color: {background_color_light};")
-        self.root_div2.setFixedSize(div_size - pad, int(div_size * 0.25)) # 224 x 56
+        # - random image section
+        self.rand_img_div = [self.create_img_div(self.root) for _ in range(3)]
+        for i, div in enumerate(self.rand_img_div):
+            div.move(int(div_size * 1.5) * i + pad * (i + 1), int(div_size * 0.09375) + pad * 4)
 
-        self.root_div3 = QWidget(self.root)
-        self.root_div3.setStyleSheet(f"background-color: {background_color_light};")
-        self.root_div3.setFixedSize(div_size - pad, int(div_size * 0.75) - pad) # 224 x 168
-
-        self.root_div4 = QWidget(self.root)
-        self.root_div4.setStyleSheet(f"background-color: {background_color_light};")
-        self.root_div4.setFixedSize(div_size * 2, int(div_size * 0.25)) # 448 x 56
-
-        # position frames
-        self.root_div1.move(pad, pad)
-        self.root_div2.move(div_size + pad * 2, pad)
-        self.root_div3.move(div_size + pad * 2, int(div_size * 0.25) + pad * 2)
-        self.root_div4.move(pad, div_size + pad * 2)
-
+        # - temp image section
+        self.temp_img_div = self.create_img_div(self.root)
+        self.temp_img_div.move(int(div_size * 1.5) * len(self.rand_img_div) + pad * (len(self.rand_img_div) + 1), int(div_size * 0.09375) + pad * 4)
+        
+        # - main image section
+        self.main_img_div = [self.create_img_div(self.root) for _ in range(8)]
+        for i, div in enumerate(self.main_img_div):
+            # 4 images per row
+            x, y = i % 4, i // 4
+            div.move(int(div_size * 1.5) * x + pad * (x + 1), int(div_size * 0.09375) + pad * 4 + (div_size + pad) * (y + 1))
+        
+        '''
         # create items in root_div1
         # image
         self.label = QLabel(self.root_div1)
@@ -291,6 +299,7 @@ class App:
         self.accept_button.move(pad, int(div_size * 0.09375) + pad * 2)
         self.incorrect_button.move(int(div_size * 0.5) + pad * 2, int(div_size * 0.09375) + pad * 2)
         self.reject_button.move(int(div_size * 0.5) * 2 + pad * 3, int(div_size * 0.09375) + pad * 2)
+        '''
 
     def on_validator_changed(self, index):
         self.control.current_validator_index = index
