@@ -1,6 +1,6 @@
 # Author: Jeffrey Chen
 # Last Modified: 08/04/2023
-import os, json, atexit, time, threading, re
+import os, json, atexit, time, threading, re, random
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout
@@ -79,6 +79,9 @@ class ControlSystem:
         self.validators = ["Jeffrey Chen", "Nancy Li", "Zoe Wang", "Vivian Wu"]
         self.current_validator_index = 0
 
+        # placeholder image
+        self.placeholder_image = os.path.join(os.path.dirname(__file__), "system_img", "placeholder.png")
+
         # Validate Results
         if not os.path.exists(os.path.join(os.path.dirname(__file__), "validate_results.json")):
             with open(os.path.join(os.path.dirname(__file__), "validate_results.json"), "w") as f:
@@ -121,6 +124,17 @@ class ControlSystem:
         labels = current_image_name.split('_')[0]
         labels = [labels[i:i+3] for i in range(0, len(labels), 3)]
         return [f"{label}: {self.catagory2food[label]}" for label in labels]
+    
+    def labels_of(self, image_path):
+        if image_path == self.placeholder_image:
+            return ["None"]
+        image_name = os.path.basename(image_path)
+        # if has file extension, remove it
+        if '.' in image_name:
+            image_name = image_name[:image_name.index('.')]
+        labels = image_name.split('_')[0]
+        labels = [labels[i:i+3] for i in range(0, len(labels), 3)]
+        return [f"{label}: {self.catagory2food[label]}" for label in labels]
 
     def current_image(self):
         return self.images[self.current_image_index]
@@ -145,6 +159,9 @@ class ControlSystem:
         if current_image_name not in self.validate_results:
             self.validate_results[current_image_name] = {}
         self.validate_results[current_image_name][self.current_validator()] = result
+
+    def random_image(self):
+        return random.choice(self.images)
     
     def exit(self):
         with open(os.path.join(os.path.dirname(__file__), "validate_results.json"), "w") as f:
@@ -156,10 +173,56 @@ class ControlSystem:
 # Main application
 class App:
 
-    def create_img_div(self, root):
+    # create image div
+    def create_img_div(self, root, *, is_temp = False):
         img_div = QWidget(root)
         img_div.setStyleSheet(f"background-color: {background_color_light};")
         img_div.setFixedSize(int(div_size * 1.5), div_size) # 336 x 224
+
+        # image
+        img_div.label = QLabel(img_div)
+        img_div.label.setPixmap(QPixmap(self.control.placeholder_image))
+        img_div.label.setScaledContents(True)
+        img_div.label.resize(div_size, div_size)
+
+        img_div.current_image = self.control.placeholder_image
+
+        # button
+        img_div.to_temp_button = QtWidgets.QPushButton(img_div)
+        if is_temp:
+            img_div.to_temp_button.setText("Temp")
+        else:
+            img_div.to_temp_button.setText("Swap to Temp")
+        img_div.to_temp_button.setStyleSheet(button_style)
+        img_div.to_temp_button.setFixedSize(int(div_size * 0.5) - pad * 2, int(div_size * 0.09375)) # 112 x 21
+        img_div.to_temp_button.clicked.connect(lambda: self.swap_image_with_temp(img_div))
+
+        # text label
+        img_div.title_text = QLabel(img_div)
+        img_div.title_text.setText("No.")
+        img_div.title_text.setStyleSheet(f"background-color: {background_color_light}; color: {text_color};")
+        img_div.title_text.setFixedSize(int(div_size * 0.5) - pad * 2, int(div_size * 0.09375)) # 112 x 21
+
+        # label text
+        img_div.label_text = QLabel(img_div)
+        img_div.label_text.setText("Current labels: ")
+        img_div.label_text.setStyleSheet(f"background-color: {background_color_light}; color: {text_color};")
+        img_div.label_text.setFixedSize(int(div_size * 0.5) - pad * 2, int(div_size * 0.09375)) # 112 x 21
+
+        # current labels
+        img_div.current_label_list = QtWidgets.QListWidget(img_div)
+        img_div.current_label_list.addItems([
+            "None"
+        ])
+        img_div.current_label_list.setFixedSize(int(div_size * 0.5) - pad * 2, div_size - pad * 5 - int(div_size * 0.09375) * 3) # 112 x 147
+        img_div.current_label_list.setStyleSheet(f"color: {text_color};")
+
+        # position items in img_div
+        img_div.label.move(0, 0)
+        img_div.to_temp_button.move(div_size + pad, pad)
+        img_div.title_text.move(div_size + pad, int(div_size * 0.09375) + pad * 2)
+        img_div.label_text.move(div_size + pad, int(div_size * 0.09375) * 2 + pad * 3)
+        img_div.current_label_list.move(div_size + pad, int(div_size * 0.09375) * 3 + pad * 4)
         return img_div
 
     def __init__(self, root: Root):
@@ -182,7 +245,7 @@ class App:
             div.move(int(div_size * 1.5) * i + pad * (i + 1), int(div_size * 0.09375) + pad * 4)
 
         # - temp image section
-        self.temp_img_div = self.create_img_div(self.root)
+        self.temp_img_div = self.create_img_div(self.root, is_temp = True)
         self.temp_img_div.move(int(div_size * 1.5) * len(self.rand_img_div) + pad * (len(self.rand_img_div) + 1), int(div_size * 0.09375) + pad * 4)
         
         # - main image section
@@ -191,6 +254,53 @@ class App:
             # 4 images per row
             x, y = i % 4, i // 4
             div.move(int(div_size * 1.5) * x + pad * (x + 1), int(div_size * 0.09375) + pad * 4 + (div_size + pad) * (y + 1))
+
+        # items in top bar
+        # - validator label
+        self.validator_label = QLabel(self.top_bar)
+        self.validator_label.setText("Validator:")
+        self.validator_label.setStyleSheet(f"background-color: {background_color_light}; color: {text_color};")
+        self.validator_label.setFixedSize(int(div_size * 0.25), int(div_size * 0.09375)) # 168 x 21
+        self.validator_label.move(pad, pad)
+
+        # - validator dropdown
+        self.validator_dropdown = QtWidgets.QComboBox(self.top_bar)
+        self.validator_dropdown.setStyleSheet(f""" 
+            QComboBox {{
+                border: 1px solid {background_color_dark};
+                border-radius: 4px;
+                padding-left: 10px;
+                color: {text_color};
+            }}
+            QComboBox::drop-down {{
+                border: 0px;
+            }}
+            QComboBox::down-arrow {{
+                image: url(./app/system_img/dropdown_arrow.png);
+                width: 12px;
+                height: 12px;
+                margin-right: 15px;
+            }}
+            QComboBox:on {{
+                border: 2px solid {text_color};
+            }}
+            QComboBox::item:selected {{
+                color: {background_color_dark};
+            }}
+            """
+        )
+        self.validator_dropdown.setFixedSize(int(div_size * 0.75), int(div_size * 0.09375)) # 168 x 21
+        self.validator_dropdown.addItems(self.control.validators)
+        self.validator_dropdown.currentIndexChanged.connect(self.on_validator_changed)
+        self.validator_dropdown.move(int(div_size * 0.25) + pad * 2, pad)
+
+        # - generate random image button
+        self.generate_random_image_button = QtWidgets.QPushButton(self.top_bar)
+        self.generate_random_image_button.setText("Random")
+        self.generate_random_image_button.setStyleSheet(button_style)
+        self.generate_random_image_button.setFixedSize(int(div_size * 0.25), int(div_size * 0.09375)) # 168 x 21
+        self.generate_random_image_button.move(div_size + pad * 5, pad)
+        self.generate_random_image_button.clicked.connect(self.random_image)
         
         '''
         # create items in root_div1
@@ -305,6 +415,59 @@ class App:
         self.control.current_validator_index = index
         self.validator_label.setText(f"Validator: {self.control.current_validator()}")
 
+    def random_image(self):
+        # get three random images from the list, no duplicates
+        random_images = []
+        while len(random_images) < 3:
+            new_image = self.control.random_image()
+            if new_image not in random_images:
+                random_images.append(new_image)
+
+        # set images
+        for i, div in enumerate(self.rand_img_div):
+            div.label.setPixmap(QPixmap(random_images[i]))
+            div.current_image = random_images[i]
+
+            # get image title (remove file extension & char before first underscore)
+            image_name = os.path.basename(random_images[i])
+            if '.' in image_name:
+                image_name = image_name[:image_name.index('.')]
+            image_name = image_name[image_name.index('_') + 1:]
+            div.title_text.setText(f"No.{image_name}")
+
+            # update current labels
+            div.current_label_list.clear()
+            div.current_label_list.addItems(self.control.labels_of(random_images[i]))
+
+    def swap_image_with_temp(self, img_label):
+        # if this is the temp image, do nothing
+        if img_label == self.temp_img_div:
+            return
+
+        temp_image = self.temp_img_div.current_image
+        image = img_label.current_image
+
+        # swap images
+        img_label.label.setPixmap(QPixmap(temp_image))
+        self.temp_img_div.label.setPixmap(QPixmap(image))
+
+        # swap current labels
+        img_label.current_label_list.clear()
+        img_label.current_label_list.addItems(self.control.labels_of(temp_image))
+        self.temp_img_div.current_label_list.clear()
+        self.temp_img_div.current_label_list.addItems(self.control.labels_of(image))
+
+        # swap image title
+        temp_title = self.temp_img_div.title_text.text()
+        title = img_label.title_text.text()
+        img_label.title_text.setText(temp_title)
+        self.temp_img_div.title_text.setText(title)
+
+        # swap current image
+        img_label.current_image = temp_image
+        self.temp_img_div.current_image = image
+
+    """
     def next_image(self):
         new_image_path = self.control.next_image()
         self.label.setPixmap(QPixmap(new_image_path))
@@ -323,6 +486,7 @@ class App:
 
     def record_result(self, result):
         self.control.record_result(result)
+    """
 
     def exit(self, event):
         self.control.exit()
