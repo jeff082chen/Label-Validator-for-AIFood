@@ -3,3 +3,4 @@
 .heartbeat.json
 __pycache__/
 validate_results.json
+*.data
