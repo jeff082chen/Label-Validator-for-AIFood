@@ -1,5 +1,5 @@
 # Author: Jeffrey Chen
-# Last Modified: 08/22/2023
+# Last Modified: 08/23/2023
 import os, json, atexit, time, threading, re, random
 from datetime import datetime
 from PyQt5 import QtWidgets
@@ -137,10 +137,13 @@ class ControlSystem:
         '''
 
     def start_heartbeat(self):
+        last_saved = self.validate_results.copy()
         while True:
             time.sleep(60)  # update heartbeat file every minute
-            with open(self.heartbeat_file, 'w') as file:
-                json.dump(self.validate_results, file, indent = 4, ensure_ascii = False)
+            if self.validate_results != last_saved:
+                with open(self.heartbeat_file, 'w') as file:
+                    json.dump(self.validate_results, file, indent = 4, ensure_ascii = False)
+                last_saved = self.validate_results.copy()
 
     def was_unclean_shutdown(self):
         return os.path.exists(self.heartbeat_file)
@@ -214,7 +217,7 @@ class App:
 
         # button
         img_div.to_temp_button = QtWidgets.QPushButton(img_div)
-        img_div.to_temp_button.setStyleSheet(button_style_active)
+        img_div.to_temp_button.setStyleSheet(button_style_inactive)
         img_div.to_temp_button.setFixedSize(int(div_size * 0.5) - pad * 2, int(div_size * 0.09375)) # 112 x 21
         if is_temp:
             img_div.to_temp_button.setText("Clear")
@@ -399,8 +402,8 @@ class App:
         temp_was_selected = self.temp_img_div.is_selected
 
         # swap images
-        self.set_image_div(img_div, temp_image)
         self.set_image_div(self.temp_img_div, image)
+        self.set_image_div(img_div, temp_image)
 
         # reselect image
         if image_was_selected:
@@ -414,8 +417,20 @@ class App:
         if image_div.current_image == self.control.placeholder_image:
             return
         
+        if image_div.is_selected:
+            # unselect image
+            image_div.label.setStyleSheet(img_style_unselected)
+            image_div.is_selected = False
+
+            # deactivate buttons
+            self.deactivate_validate_buttons()
+
+            # clear selected image
+            self.control.selected_image = None
+            return
+        
         # activate buttons
-        self.activate_buttons()
+        self.activate_validate_buttons()
 
         # update selected image
         self.control.selected_image = image_div.current_image
@@ -442,14 +457,14 @@ class App:
         self.control.record_result(result)
 
     def save_main(self):
-        # pop out a dialog to ask for save location
-        save_location = QFileDialog.getExistingDirectory(self.root, "Select Directory")
-        if save_location == "":
-            return
-        
         # save into {date}_{time}.data
         current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        save_file = os.path.join(save_location, f"{current_time}.data")
+        #save_file = os.path.join(save_location, f"{current_time}.data")
+
+        # pop out a dialog to ask for save location and file name
+        save_file = QFileDialog.getSaveFileName(self.root, "Save File", f"./{current_time}.data",filter = "Data Files (*.data)")[0]
+        if save_file == "":
+            return
 
         with open(save_file, 'w') as f:
             images = [div.current_image for div in self.main_img_div]
@@ -482,8 +497,17 @@ class App:
         image_div.current_label_list.clear()
         image_div.current_label_list.addItems(self.control.labels_of(image_path))
 
+        # activate swap button
+        if image_div is self.temp_img_div:
+            self.activate_clear_button()
+            for div in self.rand_img_div + self.main_img_div + [self.temp_img_div]:
+                self.activate_swap_button(div)
+        else:
+            self.activate_swap_button(image_div)
+
         # update selected image
         if image_div.is_selected:
+            image_div.is_selected = False
             self.image_clicked(image_div)
 
     def clear_image_div(self, image_div):
@@ -500,14 +524,35 @@ class App:
             image_div.is_selected = False
 
             # deactivate buttons
-            self.deactivate_buttons()
+            self.deactivate_validate_buttons()
 
-    def activate_buttons(self):
+        if image_div is self.temp_img_div:
+            self.deactivate_clear_button()
+            for div in self.rand_img_div + self.main_img_div + [self.temp_img_div]:
+                if div.current_image == self.control.placeholder_image:
+                    self.deactivate_swap_button(div)
+        else:
+            if self.temp_img_div.current_image == self.control.placeholder_image:
+                self.deactivate_swap_button(image_div)
+
+    def activate_swap_button(self, image_div):
+        image_div.to_temp_button.setStyleSheet(button_style_active)
+
+    def deactivate_swap_button(self, image_div):
+        image_div.to_temp_button.setStyleSheet(button_style_inactive)
+
+    def activate_clear_button(self):
+        self.temp_img_div.to_temp_button.setStyleSheet(button_style_active)
+
+    def deactivate_clear_button(self):
+        self.temp_img_div.to_temp_button.setStyleSheet(button_style_inactive)
+
+    def activate_validate_buttons(self):
         self.accept_button.setStyleSheet(button_style_active)
         self.incorrect_button.setStyleSheet(button_style_active)
         self.reject_button.setStyleSheet(button_style_active)
 
-    def deactivate_buttons(self):
+    def deactivate_validate_buttons(self):
         self.accept_button.setStyleSheet(button_style_inactive)
         self.incorrect_button.setStyleSheet(button_style_inactive)
         self.reject_button.setStyleSheet(button_style_inactive)
