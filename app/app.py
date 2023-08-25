@@ -54,7 +54,7 @@ class Root(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Label Validator")
-        self.setFixedSize(div_size * 6 + pad * 5, div_size * 3 + int(div_size * 0.09375) + pad * 7) # 1344 x 672
+        self.setFixedSize(int(div_size * 6) + pad * 5, div_size * 4 + int(div_size * 0.09375) + pad * 8) # 1344 x 672
         self.setStyleSheet(f"background-color: {background_color_dark};")
 
 # Backend logic
@@ -106,7 +106,7 @@ class ControlSystem:
         self.placeholder_image = os.path.join(os.path.dirname(__file__), "system_img", "placeholder.png")
 
         # selected image
-        self.selected_image = None
+        self.selected_image_div = None
 
         # Validate Results
         if not os.path.exists(os.path.join(os.path.dirname(__file__), "validate_results.json")):
@@ -131,7 +131,7 @@ class ControlSystem:
         def print_selected_image():
             while True:
                 time.sleep(1)
-                print(self.selected_image)
+                print(self.selected_image_div.current_image)
 
         threading.Thread(target = print_selected_image, daemon = True).start()
         '''
@@ -166,14 +166,16 @@ class ControlSystem:
         labels = [labels[i:i+3] for i in range(0, len(labels), 3)]
         return [f"{label}: {self.catagory2food[label]}" for label in labels]
     
-    def record_result(self, result):
-        current_image_name = os.path.basename(self.selected_image)
+    def record_result(self, result, remark):
+        current_image_name = os.path.basename(self.selected_image_div.current_image)
         # if has file extension, remove it
         if '.' in current_image_name:
             current_image_name = current_image_name[:current_image_name.index('.')]
         if current_image_name not in self.validate_results:
             self.validate_results[current_image_name] = {}
-        self.validate_results[current_image_name][self.current_validator()] = result
+        if remark == "":
+            remark = "None"
+        self.validate_results[current_image_name][self.current_validator()] = result + " - " + remark
 
     def random_image(self):
         return random.choice(self.images)
@@ -243,8 +245,14 @@ class App:
         img_div.current_label_list.addItems([
             "None"
         ])
-        img_div.current_label_list.setFixedSize(int(div_size * 0.5) - pad * 2, div_size - pad * 5 - int(div_size * 0.09375) * 3) # 112 x 147
+        img_div.current_label_list.setFixedSize(int(div_size * 0.5) - pad * 2, int(((div_size - pad * 5 - int(div_size * 0.09375) * 3) - pad) * 0.4)) # 112 x 21
         img_div.current_label_list.setStyleSheet(f"color: {text_color};")
+
+        # remark (A text box for the validator to write down remarks)
+        img_div.remark_text = QtWidgets.QTextEdit(img_div)
+        img_div.remark_text.setFixedSize(int(div_size * 0.5) - pad * 2, int(((div_size - pad * 5 - int(div_size * 0.09375) * 3) - pad) * 0.6)) # 112 x 21
+        img_div.remark_text.setReadOnly(True)
+        img_div.remark_text.setStyleSheet(f"color: {text_color};")
 
         # position items in img_div
         img_div.label.move(0, 0)
@@ -252,6 +260,7 @@ class App:
         img_div.title_text.move(div_size + pad, int(div_size * 0.09375) + pad * 2)
         img_div.label_text.move(div_size + pad, int(div_size * 0.09375) * 2 + pad * 3)
         img_div.current_label_list.move(div_size + pad, int(div_size * 0.09375) * 3 + pad * 4)
+        img_div.remark_text.move(div_size + pad, int(div_size * 0.09375) * 3 + pad * 4 + int(((div_size - pad * 5 - int(div_size * 0.09375) * 3) - pad) * 0.4) + pad)
         return img_div
 
     def __init__(self, root: Root):
@@ -265,7 +274,7 @@ class App:
         # - top bar
         self.top_bar = QWidget(self.root)
         self.top_bar.setStyleSheet(f"background-color: {background_color_light};")
-        self.top_bar.setFixedSize(div_size * 6 + pad * 3, int(div_size * 0.09375) + pad * 2) # 1344 x 27
+        self.top_bar.setFixedSize(int(div_size * 6) + pad * 3, int(div_size * 0.09375) + pad * 2) # 1344 x 27
         self.top_bar.move(pad, pad)
 
         # - random image section
@@ -278,9 +287,9 @@ class App:
         self.temp_img_div.move(int(div_size * 1.5) * len(self.rand_img_div) + pad * (len(self.rand_img_div) + 1), int(div_size * 0.09375) + pad * 4)
         
         # - main image section
-        self.main_img_div = [self.create_img_div(self.root) for _ in range(8)]
+        self.main_img_div = [self.create_img_div(self.root) for _ in range(12)]
         for i, div in enumerate(self.main_img_div):
-            # 4 images per row
+            # 4 images per row, 3 rows
             x, y = i % 4, i // 4
             div.move(int(div_size * 1.5) * x + pad * (x + 1), int(div_size * 0.09375) + pad * 4 + (div_size + pad) * (y + 1))
 
@@ -375,12 +384,11 @@ class App:
 
     def on_validator_changed(self, index):
         self.control.current_validator_index = index
-        self.validator_label.setText(f"Validator: {self.control.current_validator()}")
 
     def random_image(self):
         # get three random images from the list, no duplicates
         random_images = []
-        while len(random_images) < 3:
+        while len(random_images) < len(self.rand_img_div):
             new_image = self.control.random_image()
             if new_image not in random_images:
                 random_images.append(new_image)
@@ -401,9 +409,17 @@ class App:
         image_was_selected = img_div.is_selected
         temp_was_selected = self.temp_img_div.is_selected
 
+        # record image remark
+        image_remark = img_div.remark_text.toPlainText()
+        temp_remark = self.temp_img_div.remark_text.toPlainText()
+
         # swap images
         self.set_image_div(self.temp_img_div, image)
         self.set_image_div(img_div, temp_image)
+
+        # swap remarks
+        img_div.remark_text.setText(temp_remark)
+        self.temp_img_div.remark_text.setText(image_remark)
 
         # reselect image
         if image_was_selected:
@@ -426,14 +442,14 @@ class App:
             self.deactivate_validate_buttons()
 
             # clear selected image
-            self.control.selected_image = None
+            self.control.selected_image_div = None
             return
         
         # activate buttons
         self.activate_validate_buttons()
 
         # update selected image
-        self.control.selected_image = image_div.current_image
+        self.control.selected_image_div = image_div
 
         # unselect all other images
         for div in self.rand_img_div:
@@ -452,9 +468,10 @@ class App:
         image_div.is_selected = True
 
     def record_result(self, result):
-        if self.control.selected_image is None:
+        if self.control.selected_image_div is None:
             return
-        self.control.record_result(result)
+        remark = self.control.selected_image_div.remark_text.toPlainText()
+        self.control.record_result(result, remark)
 
     def save_main(self):
         # save into {date}_{time}.data
@@ -467,7 +484,7 @@ class App:
             return
 
         with open(save_file, 'w') as f:
-            images = [div.current_image for div in self.main_img_div]
+            images = [(div.current_image, div.remark_text.toPlainText()) for div in self.main_img_div]
             json.dump(images, f, indent = 4, ensure_ascii = False)
 
     def load_main(self):
@@ -478,10 +495,10 @@ class App:
         
         with open(load_file, 'r') as f:
             images = json.load(f)
-            for img_div, image in zip(self.main_img_div, images):
-                self.set_image_div(img_div, image)
+            for img_div, (image, remark) in zip(self.main_img_div, images):
+                self.set_image_div(img_div, image, remark = remark)
 
-    def set_image_div(self, image_div, image_path):
+    def set_image_div(self, image_div, image_path, remark = ""):
         # if image is placeholder, clear image div
         if image_path == self.control.placeholder_image:
             self.clear_image_div(image_div)
@@ -496,6 +513,10 @@ class App:
         # update current labels
         image_div.current_label_list.clear()
         image_div.current_label_list.addItems(self.control.labels_of(image_path))
+
+        # update remark
+        image_div.remark_text.setText(remark)
+        image_div.remark_text.setReadOnly(False)
 
         # activate swap button
         if image_div is self.temp_img_div:
@@ -516,10 +537,12 @@ class App:
         image_div.title_text.setText("No.")
         image_div.current_label_list.clear()
         image_div.current_label_list.addItems(["None"])
+        image_div.remark_text.clear()
+        image_div.remark_text.setReadOnly(True)
 
         # unselect image
         if image_div.is_selected:
-            self.control.selected_image = None
+            self.control.selected_image_div = None
             image_div.label.setStyleSheet(img_style_unselected)
             image_div.is_selected = False
 
