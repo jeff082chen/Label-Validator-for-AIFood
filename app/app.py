@@ -177,8 +177,16 @@ class ControlSystem:
             remark = "None"
         self.validate_results[current_image_name][self.current_validator()] = result + " - " + remark
 
-    def random_image(self):
-        return random.choice(self.images)
+    def random_images(self, num = 1):
+        images = []
+        random.shuffle(self.images)
+        for image in self.images:
+            if image not in images and not self.is_already_validated_by_current_validator(image):
+                images.append(image)
+            if len(images) == num:
+                return images
+        # if not enough images, return placeholder image
+        return images + [self.placeholder_image] * (num - len(images))
     
     # remove file extension & char before first underscore
     def id_of(self, image_path):
@@ -190,6 +198,17 @@ class ControlSystem:
             image_name = image_name[:image_name.index('.')]
         image_name = image_name[image_name.index('_') + 1:]
         return image_name
+    
+    def is_already_validated_by_current_validator(self, image_path):
+        if image_path == self.placeholder_image:
+            return False
+        image_name = os.path.basename(image_path)
+        # if has file extension, remove it
+        if '.' in image_name:
+            image_name = image_name[:image_name.index('.')]
+        if image_name not in self.validate_results:
+            return False
+        return self.current_validator() in self.validate_results[image_name]
     
     def exit(self):
         with open(os.path.join(os.path.dirname(__file__), "validate_results.json"), "w") as f:
@@ -386,16 +405,10 @@ class App:
         self.control.current_validator_index = index
 
     def random_image(self):
-        # get three random images from the list, no duplicates
-        random_images = []
-        while len(random_images) < len(self.rand_img_div):
-            new_image = self.control.random_image()
-            if new_image not in random_images:
-                random_images.append(new_image)
-
         # set images
+        rand_img = self.control.random_images(num = self.rand_img_div.__len__())
         for i, div in enumerate(self.rand_img_div):
-            self.set_image_div(div, random_images[i])
+            self.set_image_div(div, rand_img[i])
 
     def swap_image_with_temp(self, img_div):
         # if this is the temp image, do nothing
